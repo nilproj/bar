@@ -20,7 +20,7 @@ type User struct {
 }
 
 type Profile struct {
-	ID     int64 `bun:",pk"`
+	ID     int64 `bun:",pk,autoincrement"`
 	Lang   string
 	UserID int64
 
@@ -72,13 +72,25 @@ func TestCRUD(t *testing.T) {
 		WithQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(testing.Verbose())))
 	defer db.Close()
 
-	if err := db.ResetModel(t.Context(), (*User)(nil)); err != nil {
+	if err := db.ResetModel(t.Context(),
+		(*User)(nil),
+		(*Profile)(nil),
+	); err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := bar.ContextWithDB(t.Context(), db)
 
-	if _, err := modelUser.Create(ctx, bar.Attribute{"name": "John Doe"}); err != nil {
+	if _, err := modelUser.Create(ctx, bar.Attribute{"name": "john"}); err != nil {
+		t.Error(err)
+	}
+
+	if _, err := modelUser.Create(ctx, bar.Attribute{
+		"name": "tdd",
+		"Profile": bar.Attribute{
+			"lang": "vi",
+		},
+	}); err != nil {
 		t.Error(err)
 	}
 }

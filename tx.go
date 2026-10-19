@@ -2,16 +2,13 @@ package bar
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/uptrace/bun"
 )
 
-type dbCtxKey struct{}
-
-func ContextWithDB(ctx context.Context, db bun.IDB) context.Context {
-	return context.WithValue(ctx, dbCtxKey{}, db)
-}
-
-func DBFromContext(ctx context.Context) bun.IDB {
-	return ctx.Value(dbCtxKey{}).(bun.IDB)
+func RunInTx(ctx context.Context, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
+	return DBFromContext(ctx).RunInTx(ctx, opts, func(ctx context.Context, tx bun.Tx) error {
+		return fn(ContextWithDB(ctx, tx))
+	})
 }
