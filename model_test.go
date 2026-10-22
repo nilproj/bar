@@ -28,7 +28,7 @@ type Profile struct {
 }
 
 type Post struct {
-	ID     int64
+	ID     int64 `bun:",pk,autoincrement"`
 	Name   string
 	UserID int64
 
@@ -38,7 +38,7 @@ type Post struct {
 }
 
 type Article struct {
-	ID   int64
+	ID   int64 `bun:",pk,autoincrement"`
 	Name string
 
 	Comments []Comment `bun:"rel:has-many,join:id=trackable_id,join:type=trackable_type,polymorphic"`
@@ -59,10 +59,6 @@ type ArticlePost struct {
 	Post    *Post    `bun:"rel:belongs-to,join:post_id=id"`
 }
 
-var (
-	modelUser = bar.ModelFor[User]()
-)
-
 func TestCRUD(t *testing.T) {
 	sqldb, err := sql.Open(sqliteshim.ShimName, "file::memory:?cache=shared")
 	if err != nil {
@@ -75,22 +71,34 @@ func TestCRUD(t *testing.T) {
 	if err := db.ResetModel(t.Context(),
 		(*User)(nil),
 		(*Profile)(nil),
+		(*ArticlePost)(nil),
+		(*Post)(nil),
+		(*Article)(nil),
 	); err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := bar.ContextWithDB(t.Context(), db)
 
-	if _, err := modelUser.Create(ctx, bar.Attribute{"name": "john"}); err != nil {
+	users := []*User{
+		{Name: "user 1"},
+		{Name: "user 2"},
+	}
+	if err := bar.Create(ctx, &users); err != nil {
 		t.Error(err)
 	}
 
-	if _, err := modelUser.Create(ctx, bar.Attribute{
-		"name": "tdd",
-		"Profile": bar.Attribute{
-			"lang": "vi",
+	u3 := &User{
+		Name: "user 3",
+		Profile: &Profile{
+			Lang: "vi",
 		},
-	}); err != nil {
+		Posts: []*Post{
+			{Name: "post 1"},
+			{Name: "post 2"},
+		},
+	}
+	if err := bar.Create(ctx, u3); err != nil {
 		t.Error(err)
 	}
 }
