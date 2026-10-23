@@ -33,7 +33,7 @@ type Post struct {
 	UserID int64
 
 	User     *User      `bun:"rel:belongs-to,join:user_id=id"`
-	Comments []Comment  `bun:"rel:has-many,join:id=trackable_id,join:type=trackable_type,polymorphic"`
+	Comments []*Comment `bun:"rel:has-many,join:id=trackable_id,join:type=trackable_type,polymorphic"`
 	Articles []*Article `bun:"m2m:article_posts,join:Post=Article"`
 }
 
@@ -41,8 +41,8 @@ type Article struct {
 	ID   int64 `bun:",pk,autoincrement"`
 	Name string
 
-	Comments []Comment `bun:"rel:has-many,join:id=trackable_id,join:type=trackable_type,polymorphic"`
-	Posts    []*Post   `bun:"m2m:article_posts,join:Article=Post"`
+	Comments []*Comment `bun:"rel:has-many,join:id=trackable_id,join:type=trackable_type,polymorphic"`
+	Posts    []*Post    `bun:"m2m:article_posts,join:Article=Post"`
 }
 
 type Comment struct {
@@ -74,6 +74,7 @@ func TestCRUD(t *testing.T) {
 		(*ArticlePost)(nil),
 		(*Post)(nil),
 		(*Article)(nil),
+		(*Comment)(nil),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +95,20 @@ func TestCRUD(t *testing.T) {
 			Lang: "vi",
 		},
 		Posts: []*Post{
-			{Name: "post 1"},
-			{Name: "post 2"},
+			{
+				Name: "post 1",
+				Articles: []*Article{
+					{Name: "article 1"},
+					{Name: "article 2"},
+				},
+			},
+			{
+				Name: "post 2",
+				Comments: []*Comment{
+					{Text: "comment 1"},
+					{Text: "comment 2"},
+				},
+			},
 		},
 	}
 	if err := bar.Create(ctx, u3); err != nil {
