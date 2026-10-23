@@ -7,34 +7,35 @@ import (
 	"github.com/uptrace/bun/schema"
 )
 
-func ModelFor[T any]() Model[T] {
-	return Model[T]{}
+func Model(mod any) *model {
+	return &model{mod: mod}
 }
 
-type Model[T any] struct{}
+type model struct {
+	mod any
 
-func (m Model[T]) Create(ctx context.Context, attrs ...Attribute) (*T, error) {
-	model := new(T)
-	return model, RecordOf(model).Create(ctx, attrs...)
+	el reflect.Value
 }
 
-func Create(ctx context.Context, model any) error {
+func (m *model) Relation(name string) *relation {
+	return &relation{m, name}
+}
+
+func (m *model) Create(ctx context.Context) error {
 	return RunInTx(ctx, nil, func(ctx context.Context) error {
-		db := DBFromContext(ctx)
-
-		if _, err := db.NewInsert().Model(model).Exec(ctx); err != nil {
+		if _, err := DBFromContext(ctx).NewInsert().Model(m.mod).Exec(ctx); err != nil {
 			return err
 		}
 
-		mv := reflect.ValueOf(model).Elem()
-		switch mv.Kind() {
+		el := m.elem()
+		switch el.Kind() {
 		case reflect.Struct:
-			if err := createRelations(ctx, mv); err != nil {
+			if err := m.createRelations(ctx); err != nil {
 				return err
 			}
 		case reflect.Slice:
-			for i := range mv.Len() {
-				if err := createRelations(ctx, mv.Index(i).Elem()); err != nil {
+			for i := range el.Len() {
+				if err := Model(el.Index(i).Interface()).createRelations(ctx); err != nil {
 					return err
 				}
 			}
@@ -44,42 +45,32 @@ func Create(ctx context.Context, model any) error {
 	})
 }
 
-func createRelations(ctx context.Context, v reflect.Value) error {
-	table := DBFromContext(ctx).Dialect().Tables().Get(v.Type())
-	for name, r := range table.Relations {
-		fv := v.FieldByName(name)
+func (m *model) createRelations(ctx context.Context) error {
+	el := m.elem()
+
+	for name := range m.table(ctx).Relations {
+		fv := el.FieldByName(name)
 		if fv.IsZero() {
 			continue
 		}
-		switch r.Type {
-		case schema.HasOneRelation:
-			setFKs(r, v, fv.Elem())
-			if err := Create(ctx, fv.Interface()); err != nil {
-				return err
-			}
-		case schema.HasManyRelation:
-			for i := range fv.Len() {
-				setFKs(r, v, fv.Index(i).Elem())
-			}
-			if err := Create(ctx, newSlice(fv).Interface()); err != nil {
-				return err
-			}
-		case schema.ManyToManyRelation:
-			if err := Create(ctx, newSlice(fv).Interface()); err != nil {
-				return err
-			}
-			size := fv.Len()
-			s := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(r.M2MTable.Type)), 0, size)
-			for i := range size {
-				v := newM2M(r, v, fv.Index(i).Elem())
-				s = reflect.Append(s, v)
-			}
-			if err := Create(ctx, newSlice(s).Interface()); err != nil {
-				return err
-			}
+
+		if err := m.Relation(name).Create(ctx, fv.Interface()); err != nil {
+			return err
 		}
 	}
+
 	return nil
+}
+
+func (m *model) table(ctx context.Context) *schema.Table {
+	return DBFromContext(ctx).Dialect().Tables().Get(m.elem().Type())
+}
+
+func (m *model) elem() reflect.Value {
+	if !m.el.IsValid() {
+		m.el = reflect.ValueOf(m.mod).Elem()
+	}
+	return m.el
 }
 
 func setFKs(r *schema.Relation, bv reflect.Value, jv reflect.Value) {
@@ -101,10 +92,4 @@ func newM2M(r *schema.Relation, bv reflect.Value, jv reflect.Value) reflect.Valu
 		el.FieldByName(fk.GoName).Set(bv.FieldByName(r.BasePKs[i].GoName))
 	}
 	return v
-}
-
-func newSlice(v reflect.Value) reflect.Value {
-	r := reflect.New(v.Type())
-	r.Elem().Set(v)
-	return r
 }

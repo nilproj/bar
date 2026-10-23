@@ -83,35 +83,38 @@ func TestCRUD(t *testing.T) {
 
 	users := []*User{
 		{Name: "user 1"},
-		{Name: "user 2"},
-	}
-	if err := bar.Create(ctx, &users); err != nil {
-		t.Error(err)
-	}
-
-	u3 := &User{
-		Name: "user 3",
-		Profile: &Profile{
-			Lang: "vi",
-		},
-		Posts: []*Post{
-			{
-				Name: "post 1",
-				Articles: []*Article{
-					{Name: "article 1"},
-					{Name: "article 2"},
-				},
-			},
-			{
-				Name: "post 2",
-				Comments: []*Comment{
-					{Text: "comment 1"},
-					{Text: "comment 2"},
-				},
+		{
+			Name: "user 2",
+			Profile: &Profile{
+				Lang: "vi",
 			},
 		},
+		{
+			Name: "user 3",
+			Posts: []*Post{
+				{
+					Name: "post 1",
+					Articles: []*Article{
+						{Name: "article 1"},
+						{
+							Name: "article 2",
+							Comments: []*Comment{
+								{Text: "comment 1"},
+							},
+						},
+					},
+				},
+				{
+					Name: "post 2",
+					Comments: []*Comment{
+						{Text: "comment 2"},
+						{Text: "comment 3"},
+					},
+				},
+			},
+		},
 	}
-	if err := bar.Create(ctx, u3); err != nil {
+	if err := bar.Model(&users).Create(ctx); err != nil {
 		t.Error(err)
 	}
 }
