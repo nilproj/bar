@@ -12,8 +12,9 @@ import (
 )
 
 type User struct {
-	ID   int64 `bun:",pk,autoincrement"`
-	Name string
+	ID       int64 `bun:",pk,autoincrement"`
+	Name     string
+	Username string `bun:",notnull,unique"`
 
 	Profile *Profile `bun:"rel:has-one,join:id=user_id"`
 	Posts   []*Post  `bun:"rel:has-many,join:id=user_id"`
@@ -81,16 +82,28 @@ func TestCRUD(t *testing.T) {
 
 	ctx := bar.ContextWithDB(t.Context(), db)
 
+	u1 := &User{
+		Name:     "user 1",
+		Username: "u1",
+	}
+	if err := bar.Model(u1).FindOrCreate(ctx, "username"); err != nil {
+		t.Error(err)
+	}
+	if err := bar.Model(u1).Relation("Profile").Create(ctx, &Profile{Lang: "en"}); err != nil {
+		t.Error(err)
+	}
+
 	users := []*User{
-		{Name: "user 1"},
 		{
-			Name: "user 2",
+			Name:     "user 2",
+			Username: "u2",
 			Profile: &Profile{
 				Lang: "vi",
 			},
 		},
 		{
-			Name: "user 3",
+			Name:     "user 3",
+			Username: "u3",
 			Posts: []*Post{
 				{
 					Name: "post 1",
@@ -116,5 +129,12 @@ func TestCRUD(t *testing.T) {
 	}
 	if err := bar.Model(&users).Create(ctx); err != nil {
 		t.Error(err)
+	}
+
+	var allUsers []*User
+	if err := bar.Model(&allUsers).Take(ctx); err != nil {
+		t.Error(err)
+	} else if l := len(allUsers); l != 3 {
+		t.Errorf("expect: 3 users, got %v", l)
 	}
 }

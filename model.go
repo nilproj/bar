@@ -2,6 +2,7 @@ package bar
 
 import (
 	"context"
+	"database/sql"
 	"reflect"
 
 	"github.com/uptrace/bun/schema"
@@ -19,6 +20,30 @@ type model struct {
 
 func (m *model) Relation(name string) *relation {
 	return &relation{m, name}
+}
+
+func (m *model) Take(ctx context.Context, lo ...int64) error {
+	var l, o int64
+	if len(lo) > 0 {
+		l = lo[0]
+	}
+	if len(lo) > 1 {
+		o = lo[1]
+	}
+
+	return DBFromContext(ctx).NewSelect().Model(m.mod).Limit(l).Offset(o).Scan(ctx)
+}
+
+func (m *model) FindOrCreate(ctx context.Context, cols ...string) error {
+	err := m.Find(ctx, cols...)
+	if err == sql.ErrNoRows {
+		return m.Create(ctx)
+	}
+	return err
+}
+
+func (m *model) Find(ctx context.Context, cols ...string) error {
+	return DBFromContext(ctx).NewSelect().Model(m.mod).WherePK(cols...).Scan(ctx)
 }
 
 func (m *model) Create(ctx context.Context) error {
