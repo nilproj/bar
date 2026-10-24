@@ -1,7 +1,9 @@
 package bar_test
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/nilproj/bar"
@@ -60,13 +62,42 @@ type ArticlePost struct {
 	Post    *Post    `bun:"rel:belongs-to,join:post_id=id"`
 }
 
+type logger struct {
+	text string
+}
+
+var _ bun.QueryHook = (*logger)(nil)
+
+func (*logger) BeforeQuery(ctx context.Context, e *bun.QueryEvent) context.Context {
+	return ctx
+}
+
+func (l *logger) AfterQuery(ctx context.Context, e *bun.QueryEvent) {
+	switch e.Operation() {
+	case "SAVEPOINT":
+		l.text = l.text + "\n" + "SAVEPOINT"
+	case "RELEASE":
+		l.text = l.text + "\n" + "RELEASE"
+	default:
+		l.text = l.text + "\n" + e.Query
+	}
+}
+
+func (l *logger) test(t *testing.T, query string) {
+	if !strings.HasSuffix(l.text, query) {
+		t.Error("not expected query")
+	}
+}
+
 func TestCRUD(t *testing.T) {
+	l := &logger{}
 	sqldb, err := sql.Open(sqliteshim.ShimName, "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatal(err)
 	}
 	db := bun.NewDB(sqldb, sqlitedialect.New()).
-		WithQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(testing.Verbose())))
+		WithQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(testing.Verbose()))).
+		WithQueryHook(l)
 	defer db.Close()
 
 	if err := db.ResetModel(t.Context(),
@@ -82,18 +113,11 @@ func TestCRUD(t *testing.T) {
 
 	ctx := bar.ContextWithDB(t.Context(), db)
 
-	u1 := &User{
-		Name:     "user 1",
-		Username: "u1",
-	}
-	if err := bar.Model(u1).FindOrCreate(ctx, "username"); err != nil {
-		t.Error(err)
-	}
-	if err := bar.Model(u1).Relation("Profile").Create(ctx, &Profile{Lang: "en"}); err != nil {
-		t.Error(err)
-	}
-
 	users := []*User{
+		{
+			Name:     "user 1",
+			Username: "u1",
+		},
 		{
 			Name:     "user 2",
 			Username: "u2",
@@ -130,11 +154,51 @@ func TestCRUD(t *testing.T) {
 	if err := bar.Model(&users).Create(ctx); err != nil {
 		t.Error(err)
 	}
+	l.test(t, `BEGIN
+INSERT INTO "users" ("name", "username") VALUES ('user 1', 'u1'), ('user 2', 'u2'), ('user 3', 'u3') RETURNING "id"
+SAVEPOINT
+INSERT INTO "profiles" ("lang", "user_id") VALUES ('vi', 2) RETURNING "id"
+RELEASE
+SAVEPOINT
+INSERT INTO "posts" ("name", "user_id") VALUES ('post 1', 3), ('post 2', 3) RETURNING "id"
+SAVEPOINT
+INSERT INTO "articles" ("name") VALUES ('article 1'), ('article 2') RETURNING "id"
+SAVEPOINT
+INSERT INTO "article_posts" ("article_id", "post_id") VALUES (1, 1), (2, 1)
+RELEASE
+SAVEPOINT
+INSERT INTO "comments" ("trackable_id", "trackable_type", "text") VALUES (2, 'article', 'comment 1')
+RELEASE
+RELEASE
+SAVEPOINT
+INSERT INTO "comments" ("trackable_id", "trackable_type", "text") VALUES (2, 'post', 'comment 2'), (2, 'post', 'comment 3')
+RELEASE
+RELEASE
+COMMIT`)
 
-	var allUsers []*User
-	if err := bar.Model(&allUsers).Take(ctx); err != nil {
+	u3 := &User{}
+	if err := bar.Model(u3).Take(ctx, 1, 2); err != nil {
 		t.Error(err)
-	} else if l := len(allUsers); l != 3 {
-		t.Errorf("expect: 3 users, got %v", l)
 	}
+	l.test(t, `SELECT "user"."id", "user"."name", "user"."username" FROM "users" AS "user" LIMIT 1 OFFSET 2`)
+
+	var u3Posts []*Post
+	if err := bar.Model(u3).Relation("Posts", &u3Posts).Take(ctx); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `SELECT "post"."id", "post"."name", "post"."user_id" FROM "posts" AS "post" WHERE ("user_id" = 3)`)
+
+	p1, p2 := u3Posts[0], u3Posts[1]
+
+	var p1Articles []*Article
+	if err := bar.Model(p1).Relation("Articles", &p1Articles).Take(ctx); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `SELECT "article"."id", "article"."name" FROM "articles" AS "article" JOIN "article_posts" AS "article_post" ON ("article_post"."article_id" = "article".'id') WHERE ("article_post"."post_id" = 1)`)
+
+	c2 := &Comment{}
+	if err := bar.Model(p2).Relation("Comments", c2).Take(ctx, 1); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `SELECT "comment"."trackable_id", "comment"."trackable_type", "comment"."text" FROM "comments" AS "comment" WHERE ("trackable_id" = 2) AND ("trackable_type" = 'post') LIMIT 1`)
 }
