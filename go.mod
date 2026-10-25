@@ -3,6 +3,7 @@ module github.com/nilproj/bar
 go 1.26.5
 
 require (
+	github.com/graph-gophers/dataloader/v7 v7.2.0
 	github.com/uptrace/bun v1.3.0
 	github.com/uptrace/bun/dialect/sqlitedialect v1.3.0
 	github.com/uptrace/bun/driver/sqliteshim v1.3.0
