@@ -33,6 +33,32 @@ func (m *model) Includes(rels ...string) *model {
 	return m
 }
 
+func (m *model) With(data any) *model {
+	el := m.elem()
+	v := reflect.ValueOf(data)
+
+	for f := range v.Fields() {
+		fv := v.FieldByName(f.Name)
+		if fv.IsZero() {
+			continue
+		}
+
+		fel := el.FieldByName(f.Name)
+
+		if fv.Type().Implements(ioptn) {
+			if fv.FieldByName("Set").Bool() {
+				fel.Set(fv.FieldByName("Value").Elem())
+			}
+			continue
+		}
+
+		fel.Set(indirect(fv))
+
+	}
+
+	return m
+}
+
 func (m *model) Take(ctx context.Context, lo ...int64) error {
 	var l, o int64
 	if len(lo) > 0 {
@@ -135,4 +161,11 @@ func (m *model) elem() reflect.Value {
 		m.el = reflect.ValueOf(m.mod).Elem()
 	}
 	return m.el
+}
+
+func indirect(v reflect.Value) reflect.Value {
+	if v.Kind() == reflect.Pointer {
+		return v.Elem()
+	}
+	return v
 }

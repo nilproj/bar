@@ -208,4 +208,21 @@ COMMIT`)
 	}
 	l.test(t, `SELECT "article"."id", "article"."name" FROM "articles" AS "article" WHERE ("article"."id" = 2)
 SELECT "comment"."trackable_id", "comment"."trackable_type", "comment"."text" FROM "comments" AS "comment" WHERE ("comment"."trackable_id" IN (2)) AND ("trackable_type" = 'article')`)
+
+	p3 := new(Post)
+	p3Input := PostInput{
+		UserID: 1,
+		Name:   bar.MakeOptional("post 3"),
+	}
+	if err := bar.Model(p3).With(p3Input).Create(ctx); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `BEGIN
+INSERT INTO "posts" ("name", "user_id") VALUES ('post 3', 1) RETURNING "id"
+COMMIT`)
+}
+
+type PostInput struct {
+	UserID int64
+	Name   bar.Optional[string]
 }
