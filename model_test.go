@@ -201,4 +201,11 @@ COMMIT`)
 		t.Error(err)
 	}
 	l.test(t, `SELECT "comment"."trackable_id", "comment"."trackable_type", "comment"."text" FROM "comments" AS "comment" WHERE ("trackable_id" = 2) AND ("trackable_type" = 'post') LIMIT 1`)
+
+	a2 := &Article{ID: 2}
+	if err := bar.Model(a2).Includes("Comments").Find(ctx); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `SELECT "article"."id", "article"."name" FROM "articles" AS "article" WHERE ("article"."id" = 2)
+SELECT "comment"."trackable_id", "comment"."trackable_type", "comment"."text" FROM "comments" AS "comment" WHERE ("comment"."trackable_id" IN (2)) AND ("trackable_type" = 'article')`)
 }

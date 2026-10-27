@@ -14,8 +14,9 @@ func Model(mod any) *model {
 }
 
 type model struct {
-	mod any
-	rel *relation
+	mod          any
+	rel          *relation
+	includedRels []string
 
 	el reflect.Value
 }
@@ -25,6 +26,11 @@ func (m *model) Relation(name string, mod any) *model {
 		mod: mod,
 		rel: &relation{m, name},
 	}
+}
+
+func (m *model) Includes(rels ...string) *model {
+	m.includedRels = append(m.includedRels, rels...)
+	return m
 }
 
 func (m *model) Take(ctx context.Context, lo ...int64) error {
@@ -85,7 +91,14 @@ func (m *model) Create(ctx context.Context) error {
 }
 
 func (m *model) newSelect(ctx context.Context) *bun.SelectQuery {
-	fns := []func(*bun.SelectQuery) *bun.SelectQuery{}
+	fns := []func(*bun.SelectQuery) *bun.SelectQuery{
+		func(sq *bun.SelectQuery) *bun.SelectQuery {
+			for _, rel := range m.includedRels {
+				sq = sq.Relation(rel)
+			}
+			return sq
+		},
+	}
 	if m.rel != nil {
 		fns = append(fns, m.rel.selectQuery(ctx))
 	}
