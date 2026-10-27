@@ -13,9 +13,9 @@ type Optional[T any] struct {
 	Set   bool
 }
 
-var _ IOptional = Optional[any]{}
+var _ IOptional = (*Optional[any])(nil)
 
-func (o Optional[T]) Nullable() {}
+func (o *Optional[T]) Nullable() {}
 
 func MakeOptional[T any](v T) Optional[T] {
 	return Optional[T]{

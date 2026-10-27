@@ -45,7 +45,7 @@ func (m *model) With(data any) *model {
 
 		fel := el.FieldByName(f.Name)
 
-		if fv.Type().Implements(ioptn) {
+		if reflect.PointerTo(fv.Type()).Implements(ioptn) {
 			if fv.FieldByName("Set").Bool() {
 				fel.Set(fv.FieldByName("Value").Elem())
 			}
