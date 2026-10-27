@@ -220,6 +220,14 @@ SELECT "comment"."trackable_id", "comment"."trackable_type", "comment"."text" FR
 	l.test(t, `BEGIN
 INSERT INTO "posts" ("name", "user_id") VALUES ('post 3', 1) RETURNING "id"
 COMMIT`)
+
+	c4 := &Comment{Text: "comment 4"}
+	if err := bar.Model(p3).Relation("Comments", c4).Create(ctx); err != nil {
+		t.Error(err)
+	}
+	l.test(t, `BEGIN
+INSERT INTO "comments" ("trackable_id", "trackable_type", "text") VALUES (3, 'post', 'comment 4')
+COMMIT`)
 }
 
 type PostInput struct {

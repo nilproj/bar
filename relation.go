@@ -45,12 +45,16 @@ func (rel *relation) selectQuery(ctx context.Context) func(*bun.SelectQuery) *bu
 func (rel *relation) beforeCreate(ctx context.Context, model any) func() error {
 	r := rel.base.table(ctx).Relations[rel.name]
 	el := rel.base.elem()
-	v := reflect.ValueOf(model).Elem()
+	mv := reflect.ValueOf(model)
+	v := mv.Elem()
 
 	switch r.Type {
 	case schema.HasOneRelation:
 		setFKs(r, el, v)
 	case schema.HasManyRelation:
+		if v.Kind() != reflect.Slice {
+			v = toSlice(mv)
+		}
 		for i := range v.Len() {
 			setFKs(r, el, v.Index(i).Elem())
 		}
@@ -96,4 +100,9 @@ func newM2M(r *schema.Relation, bv reflect.Value, jv reflect.Value) reflect.Valu
 		el.FieldByName(fk.GoName).Set(bv.FieldByName(r.BasePKs[i].GoName))
 	}
 	return v
+}
+
+func toSlice(v reflect.Value) reflect.Value {
+	s := reflect.MakeSlice(reflect.SliceOf(v.Type()), 0, 1)
+	return reflect.Append(s, v)
 }
